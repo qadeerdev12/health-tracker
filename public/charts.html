@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Health tracker — WHOOP</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f9f9f7;
+        --surface-1: #fcfcfb;
+        --text-primary: #0b0b0b;
+        --text-secondary: #52514e;
+        --text-muted: #898781;
+        --gridline: #e1e0d9;
+        --baseline: #c3c2b7;
+        --border: rgba(11, 11, 11, 0.1);
+        --series-1: #2a78d6;
+        --series-2: #eb6834;
+        --series-3: #1baf7a;
+        --series-4: #eda100;
+        --good: #0ca30c;
+        --warning: #fab219;
+        --critical: #d03b3b;
+        --success-text: #006300;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:where(:not([data-theme='light'])) {
+          color-scheme: dark;
+          --page: #0d0d0d;
+          --surface-1: #1a1a19;
+          --text-primary: #ffffff;
+          --text-secondary: #c3c2b7;
+          --text-muted: #898781;
+          --gridline: #2c2c2a;
+          --baseline: #383835;
+          --border: rgba(255, 255, 255, 0.1);
+          --series-1: #3987e5;
+          --series-2: #d95926;
+          --series-3: #199e70;
+          --series-4: #c98500;
+          --success-text: #0ca30c;
+        }
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --page: #0d0d0d;
+        --surface-1: #1a1a19;
+        --text-primary: #ffffff;
+        --text-secondary: #c3c2b7;
+        --gridline: #2c2c2a;
+        --baseline: #383835;
+        --border: rgba(255, 255, 255, 0.1);
+        --series-1: #3987e5;
+        --series-2: #d95926;
+        --series-3: #199e70;
+        --series-4: #c98500;
+        --success-text: #0ca30c;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 0 1.25rem 4rem;
+        background: var(--page);
+        color: var(--text-primary);
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-size: 15px;
+        line-height: 1.5;
+      }
+      .wrap { max-width: 1080px; margin: 0 auto; }
+
+      header.top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.75rem;
+        padding: 1.75rem 0 0.5rem;
+      }
+      header.top h1 { font-size: 1.15rem; font-weight: 600; margin: 0; }
+      header.top .who { color: var(--text-secondary); font-size: 0.9rem; }
+      header.top .spacer { flex: 1; }
+
+      /* One filter row above everything it scopes. */
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        padding: 0.5rem 0 1.25rem;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 1.5rem;
+      }
+      .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+      .seg button {
+        font: inherit;
+        font-size: 0.85rem;
+        padding: 0.35rem 0.7rem;
+        border: 0;
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+      }
+      .seg button[aria-pressed='true'] { background: var(--text-primary); color: var(--page); font-weight: 600; }
+      .ghost {
+        font: inherit;
+        font-size: 0.85rem;
+        padding: 0.35rem 0.7rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .ghost:hover { background: var(--border); }
+
+      .card {
+        background: var(--surface-1);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.1rem 1.2rem 1.2rem;
+      }
+      .card h2 {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin: 0;
+      }
+      .card .sub { font-size: 0.82rem; color: var(--text-muted); margin: 0.15rem 0 0; }
+      .card-head { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.85rem; }
+      .card-head > div:first-child { min-width: 0; }  /* let the subtitle wrap instead of running under the toggle */
+      .card-head .spacer { flex: 1; }
+      .card-head .seg { flex: none; }
+
+      /* Hero + KPI */
+      .lead { display: grid; grid-template-columns: minmax(200px, 1fr) 2fr; gap: 1rem; margin-bottom: 1rem; }
+      @media (max-width: 760px) { .lead { grid-template-columns: 1fr; } }
+      .hero-label { font-size: 0.85rem; color: var(--text-secondary); }
+      .hero-value { font-size: 3.25rem; font-weight: 600; line-height: 1.05; margin: 0.35rem 0 0; letter-spacing: -0.02em; }
+      .hero-unit { font-size: 1.1rem; font-weight: 500; color: var(--text-secondary); margin-left: 0.25rem; }
+      .hero-delta { font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.4rem; }
+
+      .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 1rem 0.9rem; }
+      .kpi .k-label { font-size: 0.8rem; color: var(--text-secondary); }
+      .kpi .k-value { font-size: 1.6rem; font-weight: 600; line-height: 1.2; margin-top: 0.1rem; }
+      .kpi .k-value small { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-left: 0.15rem; }
+      .kpi .k-note { font-size: 0.78rem; color: var(--text-muted); }
+      .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.35rem; vertical-align: 0.05em; }
+
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+      @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+
+      .legend { display: flex; flex-wrap: wrap; gap: 0.75rem; font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.6rem; }
+      .legend span.item { display: inline-flex; align-items: center; }
+
+      .chart-host { position: relative; }
+      svg { display: block; width: 100%; overflow: visible; }
+      .tick { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+      .dlabel { font-size: 10px; fill: var(--text-secondary); font-variant-numeric: tabular-nums; }
+      .hit { fill: transparent; cursor: pointer; }
+      .hit:hover + .mark, .hit:focus-visible + .mark { opacity: 0.75; }
+      .hit:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 1px; }
+
+      .tip {
+        position: absolute;
+        pointer-events: none;
+        background: var(--text-primary);
+        color: var(--page);
+        border-radius: 7px;
+        padding: 0.45rem 0.6rem;
+        font-size: 0.78rem;
+        line-height: 1.35;
+        white-space: nowrap;
+        opacity: 0;
+        transition: opacity 0.1s;
+        z-index: 5;
+      }
+      .tip.on { opacity: 1; }
+      .tip b { font-weight: 600; }
+
+      table { width: 100%; border-collapse: collapse; font-size: 0.83rem; font-variant-numeric: tabular-nums; }
+      th, td { text-align: right; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+      th:first-child, td:first-child { text-align: left; }
+      th { color: var(--text-muted); font-weight: 500; }
+      .scroll-x { overflow-x: auto; }
+      .hidden { display: none; }
+
+      .empty { color: var(--text-muted); font-size: 0.85rem; padding: 1.5rem 0; text-align: center; }
+      .banner {
+        background: var(--surface-1);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+      }
+      .banner h2 { margin: 0 0 0.4rem; font-size: 1rem; }
+      .banner p { margin: 0 0 1rem; color: var(--text-secondary); font-size: 0.9rem; }
+      .connect {
+        font: inherit;
+        font-weight: 600;
+        padding: 0.55rem 1.1rem;
+        border-radius: 8px;
+        background: var(--text-primary);
+        color: var(--page);
+        text-decoration: none;
+        display: inline-block;
+      }
+      .err { color: var(--critical); font-size: 0.85rem; }
+      .stale { opacity: 0.45; transition: opacity 0.15s; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <h1>Health tracker</h1>
+        <span class="who" id="who"></span>
+        <span class="spacer"></span>
+        <a class="ghost" href="/">Raw JSON</a>
+      </header>
+
+      <div class="filters">
+        <span class="seg" id="range" role="group" aria-label="Date range">
+          <button data-days="7">7 days</button>
+          <button data-days="14" aria-pressed="true">14 days</button>
+          <button data-days="30">30 days</button>
+        </span>
+        <button class="ghost" id="refresh">Refresh</button>
+        <span class="spacer" style="flex: 1"></span>
+        <span class="who" id="meta"></span>
+      </div>
+
+      <div id="gate"></div>
+      <main id="app" class="hidden"></main>
+    </div>
+
+    <script>
+      // ---------- formatting ----------
+      const nf = (n, d = 0) =>
+        n === null || n === undefined || Number.isNaN(n)
+          ? '—'
+          : n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+
+      const hhmm = (milli) => {
+        if (!milli && milli !== 0) return '—';
+        const total = Math.round(milli / 60000);
+        const h = Math.floor(total / 60);
+        return h ? `${h}h ${String(total % 60).padStart(2, '0')}m` : `${total}m`;
+      };
+
+      const dayLabel = (iso) =>
+        new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+      const weekday = (iso) =>
+        new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short' });
+
+      const titleCase = (s) =>
+        String(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+      const band = (score) =>
+        typeof score !== 'number' ? 'unknown' : score >= 67 ? 'high' : score >= 34 ? 'moderate' : 'low';
+
+      const BAND_COLOR = {
+        high: 'var(--good)',
+        moderate: 'var(--warning)',
+        low: 'var(--critical)',
+        unknown: 'var(--baseline)',
+      };
+      const BAND_LABEL = { high: 'High', moderate: 'Moderate', low: 'Low', unknown: 'Not scored' };
+
+      const el = (html) => {
+        const t = document.createElement('template');
+        t.innerHTML = html.trim();
+        return t.content.firstElementChild;
+      };
+      const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+      // ---------- chart primitives ----------
+      const PLOT_H = 170;
+      const AXIS_H = 30;   // the x-axis band lives inside the SVG, never clipped
+      const PAD_L = 40;
+      const PAD_R = 10;
+      const PAD_T = 12;
+      const BAR_MAX = 24;
+      const GAP = 2;       // surface gap — white does the separating
+
+      /** Rounded at the data end, square at the baseline. */
+      function barPath(x, y, w, h, r = 4) {
+        const rr = Math.max(0, Math.min(r, h, w / 2));
+        return `M${x},${y + h} L${x},${y + rr} Q${x},${y} ${x + rr},${y} L${x + w - rr},${y} Q${x + w},${y} ${x + w},${y + rr} L${x + w},${y + h} Z`;
+      }
+
+      /**
+       * Returns a scale whose top tick is always >= the data max, so a mark can
+       * never grow past the plot area, plus the decimals the step needs (a 2.5
+       * step printed at 0dp would label a 2.5h bar as "3h").
+       */
+      function niceTicks(max, count = 4) {
+        if (!(max > 0)) return { ticks: [0, 1], max: 1, decimals: 0 };
+        const raw = max / count;
+        const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+        const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
+        const top = Math.ceil(max / step - 1e-9) * step;
+        const ticks = [];
+        for (let i = 0; i * step <= top + step * 1e-6; i++) ticks.push(Number((i * step).toFixed(6)));
+        const decimals = step >= 1 ? (Number.isInteger(step) ? 0 : 1) : Math.ceil(-Math.log10(step));
+        return { ticks, max: top, decimals };
+      }
+
+      /** Integers stay integers; only fractional ticks spend their decimals. */
+      const tickNum = (t, d) => nf(t, Number.isInteger(t) ? 0 : d);
+
+      function chartFrame(width, scale, fmtTick) {
+        const top = PAD_T;
+        const y = (v) => top + PLOT_H - (v / scale.max) * PLOT_H;
+        const grid = scale.ticks
+          .map(
+            (t) =>
+              `<line x1="${PAD_L}" x2="${width - PAD_R}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}" stroke="var(--gridline)" stroke-width="1" />` +
+              `<text class="tick" x="${PAD_L - 8}" y="${(y(t) + 3.5).toFixed(1)}" text-anchor="end">${esc(fmtTick(t, scale.decimals))}</text>`
+          )
+          .join('');
+        return { y, grid, baselineY: top + PLOT_H };
+      }
+
+      function xBands(width, n) {
+        const inner = width - PAD_L - PAD_R;
+        const band = n > 0 ? inner / n : inner;
+        const barW = Math.min(BAR_MAX, Math.max(3, band - GAP));
+        return { band, barW, x: (i) => PAD_L + band * i + (band - barW) / 2, cx: (i) => PAD_L + band * i + band / 2 };
+      }
+
+      /**
+       * Thinned right-to-left, so the most recent day always keeps its label and
+       * older ones drop out — labels never collide regardless of range length.
+       */
+      function xLabels(rows, cx, baselineY, label) {
+        const MIN_GAP = 44;
+        const out = [];
+        let lastX = Infinity;
+        for (let i = rows.length - 1; i >= 0; i--) {
+          const x = cx(i);
+          if (lastX - x < MIN_GAP) continue;
+          lastX = x;
+          out.push(
+            `<text class="tick" x="${x.toFixed(1)}" y="${baselineY + 16}" text-anchor="middle">${esc(label(rows[i]))}</text>`
+          );
+        }
+        return out.join('');
+      }
+
+      function attachTip(host) {
+        const tip = el('<div class="tip"></div>');
+        host.appendChild(tip);
+        host.addEventListener('pointerleave', () => tip.classList.remove('on'));
+        host.querySelectorAll('[data-tip]').forEach((node) => {
+          const show = () => {
+            tip.innerHTML = node.dataset.tip;
+            tip.classList.add('on');
+            const hb = host.getBoundingClientRect();
+            const nb = node.getBoundingClientRect();
+            let left = nb.left - hb.left + nb.width / 2 - tip.offsetWidth / 2;
+            left = Math.max(2, Math.min(left, hb.width - tip.offsetWidth - 2));
+            tip.style.left = left + 'px';
+            tip.style.top = Math.max(0, nb.top - hb.top - tip.offsetHeight - 6) + 'px';
+          };
+          node.addEventListener('pointerenter', show);
+          node.addEventListener('focus', show);
+          node.addEventListener('blur', () => tip.classList.remove('on'));
+        });
+      }
+
+      // ---------- charts ----------
+      function columnChart(host, rows, opts) {
+        const width = Math.max(260, host.clientWidth);
+        const values = rows.map(opts.value).filter((v) => typeof v === 'number');
+        if (!values.length) {
+          host.innerHTML = '<p class="empty">No scored data in this range.</p>';
+          return;
+        }
+        const scale = niceTicks(Math.max(...values));
+        const { y, grid, baselineY } = chartFrame(width, scale, opts.fmtTick ?? tickNum);
+        const { band, barW, x, cx } = xBands(width, rows.length);
+
+        const bars = rows
+          .map((r, i) => {
+            const v = opts.value(r);
+            if (typeof v !== 'number') return '';
+            const h = Math.max(1, baselineY - y(v));
+            const fill = opts.color ? opts.color(r) : 'var(--series-1)';
+            return (
+              `<g><rect class="hit" x="${(x(i) - GAP).toFixed(1)}" y="${PAD_T}" width="${(barW + GAP * 2).toFixed(1)}" height="${PLOT_H}" tabindex="0" data-tip="${esc(opts.tip(r))}" /><path class="mark" d="${barPath(x(i), y(v), barW, h)}" fill="${fill}" /></g>`
+            );
+          })
+          .join('');
+
+        // Direct-label the extreme only — never a number on every bar.
+        const peak = rows.reduce((a, r) => (opts.value(r) > (opts.value(a) ?? -1) ? r : a), rows[0]);
+        const pi = rows.indexOf(peak);
+        const peakLabel =
+          typeof opts.value(peak) === 'number'
+            ? `<text class="dlabel" x="${(x(pi) + barW / 2).toFixed(1)}" y="${(y(opts.value(peak)) - 5).toFixed(1)}" text-anchor="middle">${esc(opts.fmtLabel(opts.value(peak)))}</text>`
+            : '';
+
+        host.innerHTML =
+          `<svg viewBox="0 0 ${width} ${PAD_T + PLOT_H + AXIS_H}" height="${PAD_T + PLOT_H + AXIS_H}" role="img" aria-label="${esc(opts.aria)}">` +
+          grid +
+          `<line x1="${PAD_L}" x2="${width - PAD_R}" y1="${baselineY}" y2="${baselineY}" stroke="var(--baseline)" stroke-width="1" />` +
+          bars +
+          peakLabel +
+          xLabels(rows, cx, baselineY, opts.xLabel) +
+          '</svg>';
+        attachTip(host);
+      }
+
+      function lineChart(host, rows, opts) {
+        const width = Math.max(260, host.clientWidth);
+        const pts = rows.map(opts.value);
+        if (!pts.some((v) => typeof v === 'number')) {
+          host.innerHTML = '<p class="empty">No scored data in this range.</p>';
+          return;
+        }
+        const scale = niceTicks(Math.max(...pts.filter((v) => typeof v === 'number')));
+        const { y, grid, baselineY } = chartFrame(width, scale, opts.fmtTick ?? tickNum);
+        const { band, cx } = xBands(width, rows.length);
+
+        let d = '';
+        rows.forEach((r, i) => {
+          const v = opts.value(r);
+          if (typeof v !== 'number') return;
+          d += `${d ? 'L' : 'M'}${cx(i).toFixed(1)},${y(v).toFixed(1)}`;
+        });
+
+        const lastIdx = rows.map(opts.value).reduce((a, v, i) => (typeof v === 'number' ? i : a), -1);
+        const endDot =
+          lastIdx >= 0
+            ? `<circle cx="${cx(lastIdx).toFixed(1)}" cy="${y(opts.value(rows[lastIdx])).toFixed(1)}" r="4.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2" />` +
+              `<text class="dlabel" x="${cx(lastIdx).toFixed(1)}" y="${(y(opts.value(rows[lastIdx])) - 10).toFixed(1)}" text-anchor="end">${esc(opts.fmtLabel(opts.value(rows[lastIdx])))}</text>`
+            : '';
+
+        const hits = rows
+          .map((r, i) =>
+            typeof opts.value(r) === 'number'
+              ? `<rect class="hit" x="${(cx(i) - band / 2).toFixed(1)}" y="${PAD_T}" width="${band.toFixed(1)}" height="${PLOT_H}" tabindex="0" data-tip="${esc(opts.tip(r))}" />`
+              : ''
+          )
+          .join('');
+
+        host.innerHTML =
+          `<svg viewBox="0 0 ${width} ${PAD_T + PLOT_H + AXIS_H}" height="${PAD_T + PLOT_H + AXIS_H}" role="img" aria-label="${esc(opts.aria)}">` +
+          grid +
+          `<line x1="${PAD_L}" x2="${width - PAD_R}" y1="${baselineY}" y2="${baselineY}" stroke="var(--baseline)" stroke-width="1" />` +
+          `<path d="${d}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />` +
+          endDot +
+          hits +
+          xLabels(rows, cx, baselineY, opts.xLabel) +
+          '</svg>';
+        attachTip(host);
+      }
+
+      const STAGES = [
+        { key: 'sws', label: 'Deep (SWS)', color: 'var(--series-1)' },
+        { key: 'light', label: 'Light', color: 'var(--series-2)' },
+        { key: 'rem', label: 'REM', color: 'var(--series-3)' },
+        { key: 'awake', label: 'Awake', color: 'var(--series-4)' },
+      ];
+
+      function sleepChart(host, rows) {
+        const width = Math.max(260, host.clientWidth);
+        const totals = rows.map((r) =>
+          r.sleep?.stages ? STAGES.reduce((s, st) => s + r.sleep.stages[st.key], 0) : null
+        );
+        if (!totals.some((t) => t)) {
+          host.innerHTML = '<p class="empty">No scored sleep in this range.</p>';
+          return;
+        }
+        const maxHours = Math.max(...totals.filter(Boolean)) / 3600000;
+        const scale = niceTicks(maxHours, 4);
+        const maxVal = scale.max;
+        const { y, grid, baselineY } = chartFrame(width, scale, (t, d) => tickNum(t, d) + 'h');
+        const { band, barW, x, cx } = xBands(width, rows.length);
+
+        const bars = rows
+          .map((r, i) => {
+            if (!r.sleep?.stages) return '';
+            const stages = r.sleep.stages;
+            let cursor = baselineY;
+            const segs = STAGES.map((st) => {
+              const hours = stages[st.key] / 3600000;
+              const raw = (hours / maxVal) * PLOT_H;
+              if (raw <= 0.5) return '';
+              // Take the 2px surface gap out of the segment so totals stay honest.
+              const h = Math.max(1, raw - GAP);
+              const top = cursor - raw;
+              cursor -= raw;
+              const isTop = st.key === 'awake';
+              return isTop
+                ? `<path class="mark" d="${barPath(x(i), top, barW, h)}" fill="${st.color}" />`
+                : `<rect class="mark" x="${x(i).toFixed(1)}" y="${(top + GAP).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${st.color}" />`;
+            }).join('');
+
+            const tip =
+              `<b>${esc(dayLabel(r.date))}</b> · ${hhmm(r.sleep.asleepMilli)} asleep<br>` +
+              STAGES.map((st) => `${st.label}: ${hhmm(stages[st.key])}`).join('<br>') +
+              (r.sleep.performancePct !== null ? `<br>Performance: ${r.sleep.performancePct}%` : '');
+
+            return `<g><rect class="hit" x="${(x(i) - GAP).toFixed(1)}" y="${PAD_T}" width="${(barW + GAP * 2).toFixed(1)}" height="${PLOT_H}" tabindex="0" data-tip="${esc(tip)}" />${segs}</g>`;
+          })
+          .join('');
+
+        host.innerHTML =
+          `<svg viewBox="0 0 ${width} ${PAD_T + PLOT_H + AXIS_H}" height="${PAD_T + PLOT_H + AXIS_H}" role="img" aria-label="Sleep stage breakdown per night, hours">` +
+          grid +
+          `<line x1="${PAD_L}" x2="${width - PAD_R}" y1="${baselineY}" y2="${baselineY}" stroke="var(--baseline)" stroke-width="1" />` +
+          bars +
+          xLabels(rows, cx, baselineY, (r) => dayLabel(r.date)) +
+          '</svg>';
+        attachTip(host);
+      }
+
+      // ---------- card scaffolding ----------
+      function chartCard({ title, sub, legend = '', columns, rowsFor, render }) {
+        const card = el(`
+          <section class="card">
+            <div class="card-head">
+              <div><h2>${esc(title)}</h2><p class="sub">${esc(sub)}</p></div>
+              <span class="spacer"></span>
+              <span class="seg"><button data-v="chart" aria-pressed="true">Chart</button><button data-v="table">Table</button></span>
+            </div>
+            <div class="chart-host"></div>
+            <div class="table-view hidden scroll-x"></div>
+            ${legend}
+          </section>`);
+
+        const host = card.querySelector('.chart-host');
+        const tableView = card.querySelector('.table-view');
+
+        card._draw = (rows) => {
+          card._rows = rows;
+          render(host, rows);
+          const body = rowsFor(rows)
+            .map((cells) => `<tr>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`)
+            .join('');
+          tableView.innerHTML = `<table><thead><tr>${columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+        };
+
+        card.querySelectorAll('.seg button').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            card.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+            const showChart = btn.dataset.v === 'chart';
+            host.classList.toggle('hidden', !showChart);
+            tableView.classList.toggle('hidden', showChart);
+            if (showChart) render(host, card._rows);
+          });
+        });
+
+        return card;
+      }
+
+      // ---------- render ----------
+      const gate = document.getElementById('gate');
+      const app = document.getElementById('app');
+      let days = 14;
+      let cards = [];
+
+      function legendItems(items) {
+        return `<div class="legend">${items
+          .map((i) => `<span class="item"><span class="dot" style="background:${i.color}"></span>${esc(i.label)}</span>`)
+          .join('')}</div>`;
+      }
+
+      function render(data) {
+        const { profile, body, days: rows, workouts } = data;
+        const asc = [...rows].reverse(); // charts read left→right, oldest→newest
+        const today = rows[0] ?? null;
+
+        document.getElementById('who').textContent = profile
+          ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim()
+          : '';
+
+        const kcalValues = rows.map((d) => d.kcal).filter((v) => typeof v === 'number');
+        const avgKcal = kcalValues.length ? kcalValues.reduce((a, b) => a + b, 0) / kcalValues.length : null;
+        const todayKcal = today?.kcal ?? null;
+        const delta = todayKcal !== null && avgKcal ? todayKcal - avgKcal : null;
+
+        const rec = today?.recovery ?? null;
+        const recBand = band(rec?.score);
+
+        app.innerHTML = '';
+        cards = [];
+        // Unhide before drawing: charts size themselves off clientWidth, which is
+        // 0 while the container is display:none.
+        app.classList.remove('hidden');
+
+        // Hero + KPI row — exactly one hero figure per view.
+        app.appendChild(
+          el(`
+          <div class="lead">
+            <section class="card">
+              <div class="hero-label">Energy burned${today?.inProgress ? ' today (so far)' : ' — latest day'}</div>
+              <p class="hero-value">${todayKcal === null ? '—' : nf(Math.round(todayKcal))}<span class="hero-unit">kcal</span></p>
+              <div class="hero-delta">${
+                delta === null
+                  ? 'No scored cycle yet'
+                  : `<span style="color:${delta >= 0 ? 'var(--success-text)' : 'var(--text-secondary)'}">${delta >= 0 ? '▲' : '▼'} ${nf(Math.abs(Math.round(delta)))}</span> vs ${days}-day average`
+              }</div>
+            </section>
+            <section class="card kpis">
+              <div class="kpi">
+                <div class="k-label">Recovery</div>
+                <div class="k-value"><span class="dot" style="background:${BAND_COLOR[recBand]}"></span>${
+                  rec?.score ?? '—'
+                }<small>%</small></div>
+                <div class="k-note">${rec?.calibrating ? 'Calibrating' : BAND_LABEL[recBand]}</div>
+              </div>
+              <div class="kpi">
+                <div class="k-label">Day strain</div>
+                <div class="k-value">${today?.strain !== null && today?.strain !== undefined ? nf(today.strain, 1) : '—'}</div>
+                <div class="k-note">of 21.0</div>
+              </div>
+              <div class="kpi">
+                <div class="k-label">Sleep</div>
+                <div class="k-value">${hhmm(today?.sleep?.asleepMilli)}</div>
+                <div class="k-note">${
+                  today?.sleep?.performancePct !== null && today?.sleep?.performancePct !== undefined
+                    ? today.sleep.performancePct + '% of need'
+                    : 'Not scored'
+                }</div>
+              </div>
+              <div class="kpi">
+                <div class="k-label">Resting HR</div>
+                <div class="k-value">${rec?.restingHeartRate ?? '—'}<small>bpm</small></div>
+                <div class="k-note">HRV ${rec?.hrvMilli ? nf(rec.hrvMilli, 0) + ' ms' : '—'}</div>
+              </div>
+            </section>
+          </div>`)
+        );
+
+        // Energy burned
+        const energyCard = chartCard({
+          title: 'Energy burned',
+          sub: 'Total kcal per physiological cycle',
+          columns: ['Day', 'kcal', 'Strain', 'Avg HR', 'Max HR', 'Workouts'],
+          rowsFor: (r) =>
+            r.map((d) => [
+              `${weekday(d.date)} ${dayLabel(d.date)}`,
+              d.kcal === null ? '—' : nf(Math.round(d.kcal)),
+              d.strain === null ? '—' : nf(d.strain, 1),
+              d.averageHeartRate ?? '—',
+              d.maxHeartRate ?? '—',
+              d.workoutCount,
+            ]),
+          render: (host, r) =>
+            columnChart(host, r, {
+              aria: 'Energy burned per day in kilocalories',
+              value: (d) => d.kcal,
+              tip: (d) =>
+                `<b>${dayLabel(d.date)}</b><br>${nf(Math.round(d.kcal ?? 0))} kcal<br>Strain ${
+                  d.strain === null ? '—' : nf(d.strain, 1)
+                }${d.workoutCount ? `<br>${d.workoutCount} workout${d.workoutCount > 1 ? 's' : ''}` : ''}`,
+              xLabel: (d) => dayLabel(d.date),
+              fmtLabel: (v) => nf(Math.round(v)),
+              fmtTick: (t, d) => (t >= 1000 ? nf(t / 1000, 1) + 'k' : tickNum(t, d)),
+            }),
+        });
+
+        // Recovery — status colors, so the legend carries the band labels.
+        const recoveryCard = chartCard({
+          title: 'Recovery',
+          sub: 'Daily recovery score',
+          legend: legendItems([
+            { label: 'High (67–100%)', color: 'var(--good)' },
+            { label: 'Moderate (34–66%)', color: 'var(--warning)' },
+            { label: 'Low (0–33%)', color: 'var(--critical)' },
+          ]),
+          columns: ['Day', 'Recovery', 'Band', 'RHR', 'HRV', 'SpO₂', 'Skin temp'],
+          rowsFor: (r) =>
+            r.map((d) => [
+              `${weekday(d.date)} ${dayLabel(d.date)}`,
+              d.recovery ? d.recovery.score + '%' : '—',
+              BAND_LABEL[band(d.recovery?.score)],
+              d.recovery?.restingHeartRate ?? '—',
+              d.recovery?.hrvMilli ? nf(d.recovery.hrvMilli, 0) + ' ms' : '—',
+              d.recovery?.spo2 ? nf(d.recovery.spo2, 1) + '%' : '—',
+              d.recovery?.skinTempCelsius ? nf(d.recovery.skinTempCelsius, 1) + '°C' : '—',
+            ]),
+          render: (host, r) =>
+            columnChart(host, r, {
+              aria: 'Recovery score per day, percent',
+              value: (d) => d.recovery?.score ?? null,
+              color: (d) => BAND_COLOR[band(d.recovery?.score)],
+              tip: (d) =>
+                `<b>${dayLabel(d.date)}</b><br>${d.recovery?.score ?? '—'}% · ${
+                  BAND_LABEL[band(d.recovery?.score)]
+                }<br>RHR ${d.recovery?.restingHeartRate ?? '—'} bpm<br>HRV ${
+                  d.recovery?.hrvMilli ? nf(d.recovery.hrvMilli, 0) : '—'
+                } ms`,
+              xLabel: (d) => dayLabel(d.date),
+              fmtLabel: (v) => v + '%',
+              fmtTick: (t, d) => tickNum(t, d) + '%',
+            }),
+        });
+
+        // Strain — its own chart, never a second axis on the recovery plot.
+        const strainCard = chartCard({
+          title: 'Day strain',
+          sub: 'WHOOP strain, 0–21 scale',
+          columns: ['Day', 'Strain', 'kcal', 'Avg HR', 'Max HR'],
+          rowsFor: (r) =>
+            r.map((d) => [
+              `${weekday(d.date)} ${dayLabel(d.date)}`,
+              d.strain === null ? '—' : nf(d.strain, 1),
+              d.kcal === null ? '—' : nf(Math.round(d.kcal)),
+              d.averageHeartRate ?? '—',
+              d.maxHeartRate ?? '—',
+            ]),
+          render: (host, r) =>
+            lineChart(host, r, {
+              aria: 'Day strain over time',
+              value: (d) => d.strain,
+              tip: (d) =>
+                `<b>${dayLabel(d.date)}</b><br>Strain ${nf(d.strain, 1)}<br>Avg HR ${
+                  d.averageHeartRate ?? '—'
+                } bpm`,
+              xLabel: (d) => dayLabel(d.date),
+              fmtLabel: (v) => nf(v, 1),
+            }),
+        });
+
+        // Sleep stages
+        const sleepCard = chartCard({
+          title: 'Sleep stages',
+          sub: 'Time in each stage per night',
+          legend: legendItems(STAGES.map((s) => ({ label: s.label, color: s.color }))),
+          columns: ['Night', 'Asleep', 'Deep', 'Light', 'REM', 'Awake', 'Perf.', 'Eff.', 'Resp. rate'],
+          rowsFor: (r) =>
+            r.map((d) => [
+              `${weekday(d.date)} ${dayLabel(d.date)}`,
+              hhmm(d.sleep?.asleepMilli),
+              hhmm(d.sleep?.stages?.sws),
+              hhmm(d.sleep?.stages?.light),
+              hhmm(d.sleep?.stages?.rem),
+              hhmm(d.sleep?.stages?.awake),
+              d.sleep?.performancePct != null ? d.sleep.performancePct + '%' : '—',
+              d.sleep?.efficiencyPct != null ? nf(d.sleep.efficiencyPct, 0) + '%' : '—',
+              d.sleep?.respiratoryRate != null ? nf(d.sleep.respiratoryRate, 1) : '—',
+            ]),
+          render: sleepChart,
+        });
+
+        const grid = el('<div class="grid2"></div>');
+        grid.append(energyCard, recoveryCard, strainCard, sleepCard);
+        app.appendChild(grid);
+        cards = [energyCard, recoveryCard, strainCard, sleepCard];
+        cards.forEach((c) => c._draw(asc));
+
+        // Workouts — more than ~7 columns of meaning, so it's a table by design.
+        const wk = el(`
+          <section class="card" style="margin-top:1rem">
+            <div class="card-head"><div><h2>Workouts</h2><p class="sub">${workouts.length} in the last ${days} days</p></div></div>
+            <div class="scroll-x"></div>
+          </section>`);
+        wk.querySelector('.scroll-x').innerHTML = workouts.length
+          ? `<table><thead><tr>${['Sport', 'Date', 'Duration', 'Strain', 'kcal', 'Avg HR', 'Max HR', 'Distance']
+              .map((h) => `<th>${h}</th>`)
+              .join('')}</tr></thead><tbody>${workouts
+              .map(
+                (w) => `<tr>
+                  <td>${esc(titleCase(w.sport))}</td>
+                  <td>${esc(dayLabel(w.date))}</td>
+                  <td>${hhmm(w.durationMilli)}</td>
+                  <td>${w.strain === null ? '—' : nf(w.strain, 1)}</td>
+                  <td>${w.kcal === null ? '—' : nf(Math.round(w.kcal))}</td>
+                  <td>${w.averageHeartRate ?? '—'}</td>
+                  <td>${w.maxHeartRate ?? '—'}</td>
+                  <td>${w.distanceMeter ? nf(w.distanceMeter / 1000, 2) + ' km' : '—'}</td>
+                </tr>`
+              )
+              .join('')}</tbody></table>`
+          : '<p class="empty">No workouts recorded in this range.</p>';
+        app.appendChild(wk);
+
+        // Body measurements
+        if (body) {
+          app.appendChild(
+            el(`<section class="card kpis" style="margin-top:1rem">
+              <div class="kpi"><div class="k-label">Height</div><div class="k-value">${nf(body.height_meter, 2)}<small>m</small></div></div>
+              <div class="kpi"><div class="k-label">Weight</div><div class="k-value">${nf(body.weight_kilogram, 1)}<small>kg</small></div></div>
+              <div class="kpi"><div class="k-label">Max HR</div><div class="k-value">${body.max_heart_rate ?? '—'}<small>bpm</small></div></div>
+            </section>`)
+          );
+        }
+
+        document.getElementById('meta').textContent = `${rows.length} cycles · updated ${new Date().toLocaleTimeString()}`;
+      }
+
+      // ---------- data ----------
+      async function load() {
+        app.classList.add('stale');
+        try {
+          const res = await fetch(`/api/whoop/overview?days=${days}`);
+          if (res.status === 401) {
+            app.classList.add('hidden');
+            gate.innerHTML =
+              '<div class="banner"><h2>Not connected</h2><p>Authorize the app to read your WHOOP data.</p><a class="connect" href="/auth/whoop">Connect WHOOP</a></div>';
+            return;
+          }
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+          gate.innerHTML = '';
+          render(data);
+        } catch (err) {
+          gate.innerHTML = `<div class="banner"><h2>Couldn't load data</h2><p class="err">${esc(err.message)}</p><a class="ghost" href="/">Open raw JSON view</a></div>`;
+        } finally {
+          app.classList.remove('stale');
+        }
+      }
+
+      document.getElementById('range').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-days]');
+        if (!btn) return;
+        document
+          .querySelectorAll('#range button')
+          .forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+        days = Number(btn.dataset.days);
+        load();
+      });
+      document.getElementById('refresh').addEventListener('click', load);
+
+      let resizeTimer;
+      addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => cards.forEach((c) => c._rows && c._draw(c._rows)), 150);
+      });
+
+      if (new URLSearchParams(location.search).get('connected')) history.replaceState({}, '', '/');
+      load();
+    </script>
+  </body>
+</html>

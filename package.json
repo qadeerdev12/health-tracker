@@ -1,0 +1,19 @@
+{
+  "name": "health-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Health tracking app. Currently a thin WHOOP API v2 wrapper used to verify the integration works.",
+  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "dotenv": "16.4.7",
+    "express": "5.2.1"
+  }
+}

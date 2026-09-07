@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WHOOP data — raw JSON</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f9f9f7;
+        --surface: #fcfcfb;
+        --text: #0b0b0b;
+        --text-2: #52514e;
+        --muted: #898781;
+        --border: rgba(11, 11, 11, 0.12);
+        --key: #184f95;
+        --str: #0d366b;
+        --num: #256abf;
+        --bool: #eb6834;
+        --good: #0ca30c;
+        --bad: #d03b3b;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:where(:not([data-theme='light'])) {
+          color-scheme: dark;
+          --page: #0d0d0d;
+          --surface: #1a1a19;
+          --text: #ffffff;
+          --text-2: #c3c2b7;
+          --muted: #898781;
+          --border: rgba(255, 255, 255, 0.13);
+          --key: #86b6ef;
+          --str: #9ec5f4;
+          --num: #3987e5;
+          --bool: #d95926;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-size: 15px;
+      }
+      .wrap { max-width: 1180px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border);
+      }
+      h1 { font-size: 1.1rem; margin: 0; font-weight: 600; }
+      .spacer { flex: 1; }
+      .status { font-size: 0.85rem; color: var(--text-2); }
+      .status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.4rem; }
+
+      button, a.btn, select {
+        font: inherit;
+        font-size: 0.85rem;
+        padding: 0.35rem 0.7rem;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--surface);
+        color: var(--text-2);
+        cursor: pointer;
+        text-decoration: none;
+      }
+      button:hover, a.btn:hover { border-color: var(--muted); }
+      .primary { background: var(--text); color: var(--page); border-color: var(--text); font-weight: 600; }
+
+      .layout { display: grid; grid-template-columns: 210px 1fr; gap: 1.25rem; margin-top: 1.25rem; }
+      @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+
+      nav { display: flex; flex-direction: column; gap: 0.25rem; }
+      @media (max-width: 800px) { nav { flex-direction: row; flex-wrap: wrap; } }
+      nav button {
+        text-align: left;
+        background: transparent;
+        border-color: transparent;
+        padding: 0.4rem 0.6rem;
+      }
+      nav button[aria-current='true'] { background: var(--surface); border-color: var(--border); color: var(--text); font-weight: 600; }
+      nav .group { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0.7rem 0 0.15rem 0.6rem; }
+      @media (max-width: 800px) { nav .group { width: 100%; margin: 0.4rem 0 0; } }
+
+      .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+      .panel-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 0.8rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; color: var(--text-2); }
+      .meta { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .code {
+        margin: 0;
+        padding: 0.9rem 1rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12.5px;
+        line-height: 1.6;
+        overflow: auto;
+        max-height: 70vh;
+      }
+      .ln { padding-left: calc(var(--d, 0) * 1.6ch); white-space: pre-wrap; word-break: break-word; }
+      .ln:hover { background: var(--border); }
+      .k { color: var(--key); }
+      .s { color: var(--str); }
+      .n { color: var(--num); }
+      .b { color: var(--bool); }
+      .nul { color: var(--muted); font-style: italic; }
+      .p { color: var(--muted); }
+      details > summary { list-style: none; cursor: pointer; }
+      details > summary::-webkit-details-marker { display: none; }
+      details > summary .tw { color: var(--muted); user-select: none; }
+      details > summary::before {
+        content: '▾';
+        color: var(--muted);
+        display: inline-block;
+        width: 1.1ch;
+        margin-left: -1.3ch;
+        transition: transform 0.12s;
+      }
+      details:not([open]) > summary::before { transform: rotate(-90deg); }
+      details > summary:hover .tw, details > summary:hover::before { color: var(--text); }
+      details[open] > summary .peek { display: none; }
+      .peek { color: var(--muted); }
+      .banner { padding: 2rem 1rem; text-align: center; color: var(--text-2); }
+      .err { color: var(--bad); font-family: ui-monospace, monospace; font-size: 0.8rem; white-space: pre-wrap; }
+      .hint { font-size: 0.78rem; color: var(--muted); margin: 0.5rem 0 0; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>WHOOP data</h1>
+        <span class="status" id="status">…</span>
+        <span class="spacer"></span>
+        <label class="status" for="limit">Records</label>
+        <select id="limit">
+          <option>5</option>
+          <option selected>10</option>
+          <option>25</option>
+        </select>
+        <button id="reload">Reload</button>
+        <a class="btn" href="/charts.html">Charts view</a>
+        <a class="btn primary" id="connect" href="/auth/whoop">Connect</a>
+      </header>
+
+      <div class="layout">
+        <nav id="nav"></nav>
+        <section class="panel">
+          <div class="panel-head">
+            <span class="path" id="path"></span>
+            <span class="spacer"></span>
+            <span class="meta" id="meta"></span>
+            <button id="expand">Expand all</button>
+            <button id="copy">Copy</button>
+          </div>
+          <pre class="code" id="out">Pick an endpoint.</pre>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const ENDPOINTS = [
+        { group: 'User', label: 'Profile', path: '/api/whoop/profile' },
+        { group: 'User', label: 'Body measurement', path: '/api/whoop/body' },
+        { group: 'Collections', label: 'Cycles', path: '/api/whoop/cycles', paged: true },
+        { group: 'Collections', label: 'Recovery', path: '/api/whoop/recovery', paged: true },
+        { group: 'Collections', label: 'Sleep', path: '/api/whoop/sleep', paged: true },
+        { group: 'Collections', label: 'Workouts', path: '/api/whoop/workouts', paged: true },
+        { group: 'Combined', label: 'Overview (joined)', path: '/api/whoop/overview?days=14' },
+        { group: 'Combined', label: 'Smoke test', path: '/api/whoop/smoke-test' },
+      ];
+
+      const esc = (s) =>
+        String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+
+      /**
+       * Renders JSON as collapsible, syntax-coloured HTML — one block element per
+       * line, indented via padding. (Indenting with literal spaces inside
+       * `white-space: pre` puts trailing commas on the wrong line once a
+       * collapsed <details> is in the mix.)
+       */
+      function jsonHtml(value, depth = 0, keyHtml = '', comma = '') {
+        const line = (content) => `<div class="ln" style="--d:${depth}">${content}</div>`;
+        const tail = comma ? '<span class="p">,</span>' : '';
+
+        const primitive =
+          value === null
+            ? '<span class="nul">null</span>'
+            : typeof value === 'string'
+              ? `<span class="s">"${esc(value)}"</span>`
+              : typeof value === 'number'
+                ? `<span class="n">${value}</span>`
+                : typeof value === 'boolean'
+                  ? `<span class="b">${value}</span>`
+                  : null;
+
+        if (primitive !== null) return line(keyHtml + primitive + tail);
+
+        const isArray = Array.isArray(value);
+        const entries = isArray ? value.map((v, i) => [i, v]) : Object.entries(value);
+        const [open, close] = isArray ? ['[', ']'] : ['{', '}'];
+        if (!entries.length) return line(`${keyHtml}<span class="p">${open}${close}</span>${tail}`);
+
+        const peek = isArray
+          ? `${entries.length} item${entries.length === 1 ? '' : 's'}`
+          : `${entries.length} field${entries.length === 1 ? '' : 's'}`;
+
+        const body = entries
+          .map(([k, v], i) =>
+            jsonHtml(
+              v,
+              depth + 1,
+              isArray ? '' : `<span class="k">"${esc(k)}"</span><span class="p">: </span>`,
+              i < entries.length - 1 ? ',' : ''
+            )
+          )
+          .join('');
+
+        // Collapsed past depth 2 so a 25-record array doesn't bury the shape.
+        return (
+          `<details${depth < 2 ? ' open' : ''}>` +
+          `<summary class="ln" style="--d:${depth}">${keyHtml}<span class="tw">${open}</span>` +
+          `<span class="peek"> … ${peek} <span class="p">${close}</span>${tail}</span></summary>` +
+          body +
+          line(`<span class="p">${close}</span>${tail}`) +
+          `</details>`
+        );
+      }
+
+      let current = ENDPOINTS[0];
+      let lastRaw = '';
+
+      const nav = document.getElementById('nav');
+      const out = document.getElementById('out');
+      const pathEl = document.getElementById('path');
+      const metaEl = document.getElementById('meta');
+
+      let lastGroup = '';
+      for (const ep of ENDPOINTS) {
+        if (ep.group !== lastGroup) {
+          nav.appendChild(Object.assign(document.createElement('div'), { className: 'group', textContent: ep.group }));
+          lastGroup = ep.group;
+        }
+        const btn = document.createElement('button');
+        btn.textContent = ep.label;
+        btn.addEventListener('click', () => {
+          current = ep;
+          load();
+        });
+        ep.el = btn;
+        nav.appendChild(btn);
+      }
+
+      function url(ep) {
+        if (!ep.paged) return ep.path;
+        return `${ep.path}?limit=${document.getElementById('limit').value}`;
+      }
+
+      async function load() {
+        ENDPOINTS.forEach((e) => e.el.setAttribute('aria-current', String(e === current)));
+        const target = url(current);
+        pathEl.textContent = target;
+        metaEl.textContent = '';
+        out.textContent = 'Loading…';
+
+        const t0 = performance.now();
+        try {
+          const res = await fetch(target);
+          const text = await res.text();
+          const ms = Math.round(performance.now() - t0);
+          lastRaw = text;
+
+          let parsed;
+          try {
+            parsed = JSON.parse(text);
+          } catch {
+            out.textContent = text;
+            metaEl.textContent = `${res.status} · ${ms} ms`;
+            return;
+          }
+
+          const kb = (new Blob([text]).size / 1024).toFixed(1);
+          metaEl.innerHTML =
+            `<span style="color:${res.ok ? 'var(--good)' : 'var(--bad)'}">${res.status}</span> · ${ms} ms · ${kb} KB` +
+            (parsed.records ? ` · ${parsed.records.length} records` : '');
+          out.innerHTML = jsonHtml(parsed);
+
+          if (res.status === 401) {
+            out.innerHTML =
+              '<div class="banner">Not connected.<p class="hint">Click <b>Connect</b> above to authorize WHOOP, then reload.</p></div>';
+          }
+        } catch (err) {
+          out.innerHTML = `<div class="banner"><span class="err">${esc(err.message)}</span><p class="hint">Is the server running?</p></div>`;
+        }
+      }
+
+      async function status() {
+        const el = document.getElementById('status');
+        try {
+          const s = await (await fetch('/auth/status')).json();
+          el.innerHTML = s.connected
+            ? `<span class="dot" style="background:var(--good)"></span>Connected · token valid to ${new Date(
+                s.accessTokenExpiresAt
+              ).toLocaleTimeString()}`
+            : '<span class="dot" style="background:var(--bad)"></span>Not connected';
+          document.getElementById('connect').textContent = s.connected ? 'Reconnect' : 'Connect';
+        } catch {
+          el.textContent = 'Server unreachable';
+        }
+      }
+
+      document.getElementById('reload').addEventListener('click', () => {
+        load();
+        status();
+      });
+      document.getElementById('limit').addEventListener('change', load);
+      document.getElementById('copy').addEventListener('click', async (e) => {
+        await navigator.clipboard.writeText(lastRaw);
+        e.target.textContent = 'Copied';
+        setTimeout(() => (e.target.textContent = 'Copy'), 1200);
+      });
+      document.getElementById('expand').addEventListener('click', (e) => {
+        const expand = e.target.textContent === 'Expand all';
+        out.querySelectorAll('details').forEach((d) => (d.open = expand));
+        e.target.textContent = expand ? 'Collapse all' : 'Expand all';
+      });
+
+      if (new URLSearchParams(location.search).get('connected')) history.replaceState({}, '', '/');
+      status();
+      load();
+    </script>
+  </body>
+</html>
