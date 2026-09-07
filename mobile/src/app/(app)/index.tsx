@@ -6,8 +6,11 @@ import { AnimatedIcon } from '@/components/animated-icon';
 import { HintRow } from '@/components/hint-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Button } from '@/components/ui/button';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useSession } from '@/lib/session';
+import { supabase } from '@/lib/supabase';
 
 function getDevMenuHint() {
   if (Platform.OS === 'web') {
@@ -29,9 +32,23 @@ function getDevMenuHint() {
 }
 
 export default function HomeScreen() {
+  const { session } = useSession();
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <ThemedView style={styles.accountRow}>
+          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+            {session?.user.email}
+          </ThemedText>
+          <Button
+            title="Sign out"
+            variant="plain"
+            style={styles.signOut}
+            onPress={() => supabase.auth.signOut()}
+          />
+        </ThemedView>
+
         <ThemedView style={styles.heroSection}>
           <AnimatedIcon />
           <ThemedText type="title" style={styles.title}>
@@ -74,6 +91,18 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingBottom: BottomTabInset + Spacing.three,
     maxWidth: MaxContentWidth,
+  },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    gap: Spacing.three,
+  },
+  signOut: {
+    alignSelf: 'auto',
+    minHeight: 0,
+    paddingVertical: Spacing.one,
   },
   heroSection: {
     alignItems: 'center',
