@@ -1,7 +1,20 @@
 # health-tracker
 
-Calorie/health tracking app. Right now it is just a thin **WHOOP API v2** wrapper plus a
-one-page harness, to confirm the WHOOP integration works before anything is built on top.
+Calorie/health tracking app, built around one idea: WHOOP measures what your body
+actually burned, so the calorie target can be the real number instead of a formula.
+
+Two parts:
+
+| Directory | What it is |
+| --- | --- |
+| `.` (root) | Express server. Holds the WHOOP client secret, runs OAuth, and will sync WHOOP records into Supabase. |
+| `mobile/` | The Expo / React Native app. See [mobile/README.md](mobile/README.md). |
+
+The split is not optional: `WHOOP_CLIENT_SECRET` cannot live in the app, because
+everything in a React Native bundle is extractable. The app talks to the server;
+only the server talks to WHOOP.
+
+The sections below cover the server.
 
 ## Setup
 
