@@ -22,53 +22,71 @@ The sections below cover the server.
    Register `http://localhost:3000/auth/whoop/callback` as a Redirect URI — it must match
    `WHOOP_REDIRECT_URI` exactly, and add yourself under the app's members so the account
    you log in with is allowed to authorize it.
-2. ```bash
+2. Apply the migrations in [supabase/](supabase/) to your Supabase project.
+3. ```bash
    cp .env.example .env
    ```
-   Fill in `WHOOP_CLIENT_ID` and `WHOOP_CLIENT_SECRET`.
-3. ```bash
+   Fill in the WHOOP credentials plus `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+4. ```bash
    npm install && npm start
    ```
-4. Open http://localhost:3000, click **Connect**, approve, and pick an endpoint.
 
-## The two pages
+## Routes
 
-- **`/` — raw JSON dashboard.** The main view. Endpoint list down the side, response
-  pretty-printed with collapsible nodes and syntax colouring, plus status code, latency,
-  payload size and record count. **Copy** puts the unformatted response on the clipboard.
-- **`/charts.html` — charted view.** The same data joined into one row per cycle and
-  drawn as charts (energy burned, recovery, strain, sleep stages) with a workouts table.
-  Every chart has a table-view toggle.
+Everything except the callback requires a `Authorization: Bearer <supabase access token>`
+header — the token the app already holds after signing in. The server resolves it to a
+user id through Supabase and scopes every query to that user.
 
-## What's here
-
-| File | Role |
+| Route | Purpose |
 | --- | --- |
-| `src/whoop/oauth.js` | Authorization URL, code exchange, token refresh |
-| `src/whoop/client.js` | Authenticated API client — auto-refresh on expiry/401, pagination |
-| `src/whoop/summarize.js` | Joins cycles + recovery + sleep by `cycle_id`; kJ → kcal |
-| `src/tokenStore.js` | File-backed token storage (single user, dev only) |
-| `server.js` | OAuth routes + `/api/whoop/*` passthrough + `/overview` + smoke test |
-| `public/index.html` | Raw JSON dashboard |
-| `public/charts.html` | Charted dashboard |
+| `GET /auth/whoop/start` | Issues a `state` bound to the caller and returns the WHOOP authorization URL for the app to open |
+| `GET /auth/whoop/callback` | WHOOP redirects here. Unauthenticated by necessity — `state` is what identifies the user |
+| `GET /auth/whoop/status` | Whether this account has WHOOP linked |
+| `DELETE /auth/whoop` | Revokes at WHOOP, then drops the local rows |
+| `GET /api/whoop/*` | Per-user passthrough. For debugging and backfill only — see the rate-limit note below |
+
+### The `state` parameter carries the identity
+
+WHOOP's callback is a bare redirect: no session cookie, and the token response says
+nothing about who is coming back. So `state` cannot just prove "we started some flow" —
+it has to answer "**which** of our users is this". That binding lives in
+`whoop_oauth_states`, in the database rather than in memory, so the flow survives a
+restart and works with more than one server instance. Rows are single-use: consumed on
+read, which is what makes a replayed callback fail.
+
+### Do not call `/api/whoop/*` from a screen
+
+WHOOP allows 100 requests/minute and 10,000/day, most likely per app rather than per
+user. `/api/whoop/overview` alone spends 6. The app reads Supabase; the server fills
+Supabase from webhooks. These passthrough routes exist for debugging and the initial
+backfill.
+
+### The old HTML dashboards no longer work
+
+`public/index.html` and `public/charts.html` were built against unauthenticated,
+single-user endpoints. Those endpoints now require a Supabase token, and the server no
+longer serves the `public/` directory at all. The files are still in the tree; the React
+Native app in [mobile/](mobile/) replaces them.
 
 ## Endpoints
 
-Base URL is `https://api.prod.whoop.com/developer`.
+Base URL is `https://api.prod.whoop.com/developer`. The client is built per user with
+`whoopFor(userId)` — binding at construction rather than passing a user id into every
+call, so a handler cannot accidentally read another account's data.
 
 | Wrapper method | WHOOP endpoint |
 | --- | --- |
-| `whoop.getProfile()` | `GET /v2/user/profile/basic` |
-| `whoop.getBodyMeasurement()` | `GET /v2/user/measurement/body` |
-| `whoop.getCycles({limit,start,end,nextToken})` | `GET /v2/cycle` |
-| `whoop.getCycle(id)` | `GET /v2/cycle/{cycleId}` |
-| `whoop.getSleepForCycle(id)` | `GET /v2/cycle/{cycleId}/sleep` |
-| `whoop.getRecoveryForCycle(id)` | `GET /v2/cycle/{cycleId}/recovery` |
-| `whoop.getRecoveries(params)` | `GET /v2/recovery` |
-| `whoop.getSleeps(params)` / `getSleep(id)` | `GET /v2/activity/sleep` |
-| `whoop.getWorkouts(params)` / `getWorkout(id)` | `GET /v2/activity/workout` |
+| `api.getProfile()` | `GET /v2/user/profile/basic` |
+| `api.getBodyMeasurement()` | `GET /v2/user/measurement/body` |
+| `api.getCycles({limit,start,end,nextToken})` | `GET /v2/cycle` |
+| `api.getCycle(id)` | `GET /v2/cycle/{cycleId}` |
+| `api.getSleepForCycle(id)` | `GET /v2/cycle/{cycleId}/sleep` |
+| `api.getRecoveryForCycle(id)` | `GET /v2/cycle/{cycleId}/recovery` |
+| `api.getRecoveries(params)` | `GET /v2/recovery` |
+| `api.getSleeps(params)` / `getSleep(id)` | `GET /v2/activity/sleep` |
+| `api.getWorkouts(params)` / `getWorkout(id)` | `GET /v2/activity/workout` |
 
-`whoop.collectAll(whoop.getWorkouts, { start, end, max })` walks `next_token` pages for you.
+`api.collectAll(api.getWorkouts, { start, end, max })` walks `next_token` pages for you.
 
 The server adds one endpoint of its own: `GET /api/whoop/overview?days=N` fetches all six
 in parallel and returns them joined into one row per cycle, with kilojoules converted to

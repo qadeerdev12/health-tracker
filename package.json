@@ -2,7 +2,7 @@
   "name": "health-tracker",
   "version": "0.1.0",
   "private": true,
-  "description": "Health tracking app. Currently a thin WHOOP API v2 wrapper used to verify the integration works.",
+  "description": "Health tracking app. Express server holding the WHOOP integration; the app lives in mobile/.",
   "type": "module",
   "main": "server.js",
   "engines": {
@@ -13,6 +13,7 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.115.0",
     "dotenv": "16.4.7",
     "express": "5.2.1"
   }

@@ -1,12 +1,6 @@
-import { randomBytes } from 'node:crypto';
 import { config } from '../config.js';
 
-const { clientId, clientSecret, redirectUri, scopes, authUrl, tokenUrl } = config.whoop;
-
-/** WHOOP rejects a `state` shorter than 8 characters. */
-export function generateState() {
-  return randomBytes(16).toString('hex');
-}
+const { clientId, clientSecret, redirectUri, scopes, authUrl, tokenUrl, apiBase } = config.whoop;
 
 export function buildAuthorizationUrl(state) {
   const url = new URL(authUrl);
@@ -53,4 +47,26 @@ export function refreshTokens(refreshToken) {
     refresh_token: refreshToken,
     scope: 'offline',
   });
+}
+
+/**
+ * Reads the WHOOP user id straight from a freshly issued access token.
+ *
+ * The token response does not carry it, and it is needed *before* anything is
+ * stored -- whoop_user_id is NOT NULL and UNIQUE on the connection, so there is
+ * no valid placeholder to write first and correct afterwards. Deliberately a
+ * bare fetch rather than the client: the client reads tokens out of the store,
+ * and at this point nothing has been stored.
+ */
+export async function fetchWhoopUserId(accessToken) {
+  const res = await fetch(`${apiBase}/v2/user/profile/basic`, {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Could not read WHOOP profile (${res.status}): ${await res.text()}`);
+  }
+
+  const profile = await res.json();
+  return profile.user_id;
 }
