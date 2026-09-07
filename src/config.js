@@ -18,9 +18,34 @@ export const config = {
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   },
 
-  // Where the OAuth callback sends the user once tokens are stored. The app
-  // scheme in mobile/app.json, so the in-app browser closes back into the app.
+  // Where the OAuth callback sends the user once tokens are stored, when the
+  // app does not ask for somewhere specific. The scheme from mobile/app.json.
   appRedirectUrl: process.env.APP_REDIRECT_URL ?? 'healthtracker://whoop',
+
+  /**
+   * Return URLs the app is allowed to ask for, as prefixes. The app has to
+   * choose this at runtime -- Expo Go gets an exp:// URL, a real build gets the
+   * custom scheme, web gets http -- so the value cannot simply be fixed here.
+   * Accepting it unchecked would turn the callback into an open redirect, so it
+   * is matched against this list before being stored.
+   */
+  appRedirectAllowlist: (
+    process.env.APP_REDIRECT_ALLOWLIST ?? 'healthtracker://,exp://,exp+health-tracker://,http://localhost'
+  )
+    .split(',')
+    .map((prefix) => prefix.trim())
+    .filter(Boolean),
+
+  /**
+   * Browser origins allowed to call this server. Only the web target needs
+   * this -- a native app makes no preflight and sends no Origin -- but without
+   * it `npm run web` cannot reach the server at all. Explicit list rather than
+   * a wildcard: these responses carry a user's WHOOP data.
+   */
+  corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:8081,http://localhost:8082')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
 
   whoop: {
     clientId: process.env.WHOOP_CLIENT_ID,

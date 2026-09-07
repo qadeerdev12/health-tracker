@@ -11,6 +11,11 @@
 create table public.whoop_oauth_states (
   state text primary key,
   user_id uuid not null references auth.users on delete cascade,
+  -- Where to send the browser afterwards. Stored per flow because the right
+  -- answer depends on how the app is running: a custom scheme in a real build,
+  -- an exp:// URL under Expo Go, an http URL on web. The server validates it
+  -- against an allowlist before storing, so this is not an open redirect.
+  return_url text,
   created_at timestamptz not null default now(),
   expires_at timestamptz not null
 );

@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { WebBadge } from '@/components/web-badge';
+import { WhoopConnection } from '@/components/whoop-connection';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
@@ -48,6 +49,8 @@ export default function HomeScreen() {
             onPress={() => supabase.auth.signOut()}
           />
         </ThemedView>
+
+        <WhoopConnection />
 
         <ThemedView style={styles.heroSection}>
           <AnimatedIcon />

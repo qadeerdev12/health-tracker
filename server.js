@@ -6,7 +6,12 @@ import {
   exchangeCodeForTokens,
   fetchWhoopUserId,
 } from './src/whoop/oauth.js';
-import { createState, consumeState, purgeExpiredStates } from './src/whoop/oauthStates.js';
+import {
+  createState,
+  consumeState,
+  purgeExpiredStates,
+  isAllowedReturnUrl,
+} from './src/whoop/oauthStates.js';
 import { whoopFor, NotAuthenticatedError, WhoopApiError } from './src/whoop/client.js';
 import { getConnection, saveConnection, deleteConnection } from './src/whoop/tokenStore.js';
 import { summarize } from './src/whoop/summarize.js';
@@ -16,11 +21,31 @@ assertConfigured();
 const app = express();
 app.use(express.json());
 
+/**
+ * CORS for the web target only. Native never sends an Origin header, so this is
+ * a no-op there. Origins are matched against an explicit list because these
+ * endpoints return a user's WHOOP data; `*` would let any page read it once a
+ * token leaked.
+ */
+app.use((req, res, next) => {
+  const origin = req.get('origin');
+
+  if (origin && config.corsOrigins.includes(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
+    res.set('Vary', 'Origin');
+    res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  }
+
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res)).catch(next);
 
 /** Sends the user back into the app, with the outcome in the query string. */
-function redirectToApp(res, params) {
-  const url = new URL(config.appRedirectUrl);
+function redirectToApp(res, returnUrl, params) {
+  const url = new URL(returnUrl ?? config.appRedirectUrl);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   res.redirect(url.toString());
 }
@@ -39,7 +64,13 @@ app.get(
   '/auth/whoop/start',
   requireUser,
   wrap(async (req, res) => {
-    const state = await createState(req.userId);
+    const { returnUrl } = req.query;
+
+    if (returnUrl && !isAllowedReturnUrl(returnUrl)) {
+      return res.status(400).json({ error: `Return URL not allowed: ${returnUrl}` });
+    }
+
+    const state = await createState(req.userId, returnUrl);
     res.json({ authorizationUrl: buildAuthorizationUrl(state) });
   })
 );
@@ -49,19 +80,26 @@ app.get(
   wrap(async (req, res) => {
     const { code, state, error, error_description: errorDescription } = req.query;
 
-    if (error) {
-      return redirectToApp(res, { error, error_description: errorDescription ?? '' });
-    }
-
     // Single-use, and it is what identifies the user -- a callback we cannot
-    // tie to an account is unusable even if the code is valid.
-    const userId = await consumeState(state);
-    if (!userId) {
-      return redirectToApp(res, { error: 'invalid_state' });
+    // tie to an account is unusable even if the code is valid. It also carries
+    // where to send the browser back to, so it is consumed before any early
+    // return that needs to redirect.
+    const flow = await consumeState(state);
+
+    if (error) {
+      return redirectToApp(res, flow?.returnUrl, {
+        error,
+        error_description: errorDescription ?? '',
+      });
+    }
+    if (!flow) {
+      return redirectToApp(res, null, { error: 'invalid_state' });
     }
     if (!code) {
-      return redirectToApp(res, { error: 'missing_code' });
+      return redirectToApp(res, flow.returnUrl, { error: 'missing_code' });
     }
+
+    const { userId } = flow;
 
     const tokens = await exchangeCodeForTokens(code);
 
@@ -77,7 +115,7 @@ app.get(
     });
 
     purgeExpiredStates().catch((err) => console.error('state purge failed', err));
-    redirectToApp(res, { connected: '1' });
+    redirectToApp(res, flow.returnUrl, { connected: '1' });
   })
 );
 
