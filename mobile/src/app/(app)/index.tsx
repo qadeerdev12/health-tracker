@@ -1,36 +1,16 @@
-import * as Device from 'expo-device';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
-import { WebBadge } from '@/components/web-badge';
 import { WhoopConnection } from '@/components/whoop-connection';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useSession } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+const today = () =>
+  new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
 export default function HomeScreen() {
   const { session } = useSession();
@@ -50,32 +30,27 @@ export default function HomeScreen() {
           />
         </ThemedView>
 
-        <WhoopConnection />
-
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
+        <ThemedView style={styles.heading}>
+          <ThemedText type="subtitle">Today</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {today()}
           </ThemedText>
         </ThemedView>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
+        {/*
+          Deliberately empty rather than showing zeroes. Nothing syncs WHOOP into
+          Supabase yet, and a balance of "0 kcal" would read as a real
+          measurement rather than an absence of one.
+        */}
+        <ThemedView type="backgroundElement" style={styles.card}>
+          <ThemedText type="smallBold">Calorie balance</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Once WHOOP is connected and syncing, your measured burn for the day shows here
+            against what you have logged.
+          </ThemedText>
         </ThemedView>
 
-        {Platform.OS === 'web' && <WebBadge />}
+        <WhoopConnection />
       </SafeAreaView>
     </ThemedView>
   );
@@ -84,22 +59,25 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
     flexDirection: 'row',
+    justifyContent: 'center',
   },
   safeArea: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
+    width: '100%',
     maxWidth: MaxContentWidth,
+    paddingHorizontal: Spacing.four,
+    // The web tab list is absolutely positioned across the top of the page, so
+    // content has to be pushed clear of it. Native puts the tabs at the bottom
+    // and the safe area handles the top, hence the platform split.
+    paddingTop: Platform.OS === 'web' ? Spacing.six : 0,
+    paddingBottom: BottomTabInset + Spacing.three,
+    gap: Spacing.three,
   },
   accountRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    alignSelf: 'stretch',
     gap: Spacing.three,
   },
   signOut: {
@@ -107,24 +85,14 @@ const styles = StyleSheet.create({
     minHeight: 0,
     paddingVertical: Spacing.one,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  heading: {
+    gap: Spacing.half,
+    marginTop: Spacing.two,
   },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
+  card: {
     alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
+    gap: Spacing.two,
+    padding: Spacing.three,
     borderRadius: Spacing.four,
   },
 });
